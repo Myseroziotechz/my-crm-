@@ -1,0 +1,11 @@
+node_modules
+.next
+tsconfig.tsbuildinfo
+.DS_Store
+.env.local
+.env.*.local
+
+# Raw personal/business contact data — never commit real people's data
+recruiter_leads.xlsx
+*.xlsx
+*.csv
