@@ -12,12 +12,12 @@ import {
   LogOut,
   User,
   Settings as SettingsIcon,
-  Check,
 } from "lucide-react";
 import { cn, relativeTime } from "@/lib/utils";
 import { Avatar } from "@/components/ui/Avatar";
 import { GlobalSearch } from "@/components/search/GlobalSearch";
 import { notifications as allNotifications, currentUser } from "@/mock";
+import { logout } from "@/app/login/actions";
 import { NAV_ITEMS } from "./nav";
 
 function pageTitle(pathname: string): string {
@@ -214,12 +214,12 @@ export function Topbar({ onOpenSidebar }: { onOpenSidebar: () => void }) {
                   <SettingsIcon className="h-4 w-4 text-ink-400" /> Settings
                 </Link>
                 <div className="my-1 border-t border-ink-100" />
-                <button className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-rose-600 hover:bg-rose-50">
+                <button
+                  onClick={() => logout()}
+                  className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-rose-600 hover:bg-rose-50"
+                >
                   <LogOut className="h-4 w-4" /> Sign out
                 </button>
-              </div>
-              <div className="flex items-center gap-1.5 border-t border-ink-100 bg-ink-50 px-4 py-2 text-[11px] text-ink-400">
-                <Check className="h-3 w-3" /> Demo account · frontend preview
               </div>
             </div>
           )}

@@ -2,13 +2,18 @@
 
 import { useState } from "react";
 import { createPortal } from "react-dom";
+import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  // /login renders its own centered layout — no sidebar/topbar chrome.
+  if (pathname === "/login") return <>{children}</>;
 
   return (
     <div className="flex min-h-screen bg-ink-50">
