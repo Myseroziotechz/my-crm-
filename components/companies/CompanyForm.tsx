@@ -7,10 +7,17 @@ import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { FormField, TextInput, Select, Textarea } from "@/components/ui/FormField";
 import { INDUSTRIES, CITIES, STATES } from "@/lib/constants";
+import { createCompany } from "@/app/companies/actions";
 
 const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export function CompanyForm({ onDone }: { onDone?: () => void }) {
+interface Props {
+  onDone?: () => void;
+  /** Called after a successful save, so the caller can refresh server data. */
+  onSaved?: () => void;
+}
+
+export function CompanyForm({ onDone, onSaved }: Props) {
   const router = useRouter();
   const [values, setValues] = useState({
     name: "",
@@ -25,13 +32,15 @@ export function CompanyForm({ onDone }: { onDone?: () => void }) {
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saved, setSaved] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
 
   const set = (k: string, v: string) => {
     setValues((s) => ({ ...s, [k]: v }));
     setErrors((e) => ({ ...e, [k]: "" }));
   };
 
-  const submit = (ev: React.FormEvent) => {
+  const submit = async (ev: React.FormEvent) => {
     ev.preventDefault();
     const e: Record<string, string> = {};
     if (!values.name.trim()) e.name = "Company name is required.";
@@ -43,7 +52,18 @@ export function CompanyForm({ onDone }: { onDone?: () => void }) {
       e.website = "Enter a valid website.";
     setErrors(e);
     if (Object.keys(e).length) return;
+
+    setSubmitting(true);
+    setSubmitError("");
+    const result = await createCompany(values);
+    setSubmitting(false);
+    if ("error" in result) {
+      setSubmitError(result.error);
+      return;
+    }
+
     setSaved(true);
+    onSaved?.();
     setTimeout(() => {
       if (onDone) onDone();
       else router.push("/companies");
@@ -59,7 +79,7 @@ export function CompanyForm({ onDone }: { onDone?: () => void }) {
         <h3 className="mt-4 text-base font-semibold text-ink-900">
           Company created
         </h3>
-        <p className="mt-1 text-sm text-ink-500">Saved to the mock dataset.</p>
+        <p className="mt-1 text-sm text-ink-500">Saved to Supabase.</p>
       </div>
     );
   }
@@ -161,10 +181,17 @@ export function CompanyForm({ onDone }: { onDone?: () => void }) {
         </CardBody>
       </Card>
 
+      {submitError && (
+        <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-600">
+          {submitError}
+        </p>
+      )}
+
       <div className="flex items-center justify-end gap-3">
         <Button
           variant="outline"
           type="button"
+          disabled={submitting}
           onClick={() => {
             if (onDone) onDone();
             else router.back();
@@ -172,8 +199,8 @@ export function CompanyForm({ onDone }: { onDone?: () => void }) {
         >
           Cancel
         </Button>
-        <Button type="submit" icon={Check}>
-          Create Company
+        <Button type="submit" icon={Check} disabled={submitting}>
+          {submitting ? "Creating…" : "Create Company"}
         </Button>
       </div>
     </form>

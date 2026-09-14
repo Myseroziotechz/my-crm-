@@ -1,6 +1,6 @@
 import { createClient } from "./server";
 import type { ActivityEvent } from "@/mock";
-import type { Call, FollowUp, Lead, LeadStatus } from "@/lib/types";
+import type { Call, Company, Contact, FollowUp, Lead, LeadStatus } from "@/lib/types";
 import { INDUSTRIES, LEAD_STATUSES } from "@/lib/constants";
 import { formatTime } from "@/lib/utils";
 
@@ -223,6 +223,18 @@ export async function getFollowUpsForLead(leadId: string): Promise<FollowUp[]> {
   return ((data ?? []) as unknown as FollowUpRow[]).map(mapFollowUp);
 }
 
+export async function getFollowUpsForLeadIds(leadIds: string[]): Promise<FollowUp[]> {
+  if (leadIds.length === 0) return [];
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("follow_ups")
+    .select(FOLLOWUP_SELECT)
+    .in("lead_id", leadIds)
+    .order("date", { ascending: true });
+  if (error) throw new Error(error.message);
+  return ((data ?? []) as unknown as FollowUpRow[]).map(mapFollowUp);
+}
+
 const CALL_SELECT = `
   id, lead_id, employee_id, occurred_at, status, interest, duration_seconds, remarks,
   leads ( ${LEAD_CONTEXT_EMBED} ),
@@ -273,6 +285,160 @@ export async function getCallsForLead(leadId: string): Promise<Call[]> {
     .order("occurred_at", { ascending: true });
   if (error) throw new Error(error.message);
   return ((data ?? []) as unknown as CallRow[]).map(mapCall);
+}
+
+export async function getCallsForLeadIds(leadIds: string[]): Promise<Call[]> {
+  if (leadIds.length === 0) return [];
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("calls")
+    .select(CALL_SELECT)
+    .in("lead_id", leadIds)
+    .order("occurred_at", { ascending: false });
+  if (error) throw new Error(error.message);
+  return ((data ?? []) as unknown as CallRow[]).map(mapCall);
+}
+
+/* ------------------------------------------------------------------ */
+/* Companies & contacts                                                */
+/* ------------------------------------------------------------------ */
+
+const COMPANY_SELECT = `
+  id, name, industry, website, phone, email, address, city, state, country, status, last_contact, created_date
+`;
+
+type CompanyRow = {
+  id: string;
+  name: string;
+  industry: string;
+  website: string | null;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  country: string | null;
+  status: string;
+  last_contact: string | null;
+  created_date: string;
+};
+
+function mapCompany(row: CompanyRow, contactCount: number, leadCount: number): Company {
+  return {
+    id: row.id,
+    name: row.name,
+    industry: row.industry as Company["industry"],
+    website: row.website ?? "",
+    phone: row.phone ?? "",
+    email: row.email ?? "",
+    address: row.address ?? "",
+    city: row.city ?? "",
+    state: row.state ?? "",
+    country: row.country ?? "",
+    status: row.status as Company["status"],
+    contactCount,
+    leadCount,
+    lastContact: row.last_contact ?? row.created_date,
+    createdDate: row.created_date,
+  };
+}
+
+/** Counts rows per `company_id` — used to fill in list-page contact/lead counts without an N+1 query per row. */
+function countByCompany(rows: { company_id: string }[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const row of rows) counts.set(row.company_id, (counts.get(row.company_id) ?? 0) + 1);
+  return counts;
+}
+
+export async function getCompanies(): Promise<Company[]> {
+  const supabase = await createClient();
+  const [companiesResult, contactsResult, leadsResult] = await Promise.all([
+    supabase.from("companies").select(COMPANY_SELECT).order("name"),
+    supabase.from("contacts").select("company_id"),
+    supabase.from("leads").select("company_id"),
+  ]);
+  if (companiesResult.error) throw new Error(companiesResult.error.message);
+  if (contactsResult.error) throw new Error(contactsResult.error.message);
+  if (leadsResult.error) throw new Error(leadsResult.error.message);
+
+  const contactCounts = countByCompany(contactsResult.data ?? []);
+  const leadCounts = countByCompany(leadsResult.data ?? []);
+
+  return ((companiesResult.data ?? []) as CompanyRow[]).map((row) =>
+    mapCompany(row, contactCounts.get(row.id) ?? 0, leadCounts.get(row.id) ?? 0),
+  );
+}
+
+/** Counts aren't filled in here — the detail page derives them from the contacts/leads it fetches anyway. */
+export async function getCompanyById(id: string): Promise<Company | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("companies")
+    .select(COMPANY_SELECT)
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data ? mapCompany(data as CompanyRow, 0, 0) : null;
+}
+
+const CONTACT_SELECT = `
+  id, company_id, name, designation, phone, email, industry, city, lead_status, is_primary, created_date,
+  companies ( name )
+`;
+
+type ContactRow = {
+  id: string;
+  company_id: string;
+  name: string;
+  designation: string | null;
+  phone: string | null;
+  email: string | null;
+  industry: string | null;
+  city: string | null;
+  lead_status: string | null;
+  is_primary: boolean;
+  created_date: string;
+  companies: { name: string } | { name: string }[] | null;
+};
+
+function mapContact(row: ContactRow): Contact {
+  const company = one(row.companies);
+  return {
+    id: row.id,
+    name: row.name,
+    companyId: row.company_id,
+    companyName: company?.name ?? "",
+    designation: row.designation ?? "",
+    phone: row.phone ?? "",
+    email: row.email ?? "",
+    industry: (row.industry ?? "") as Contact["industry"],
+    city: row.city ?? "",
+    leadStatus: (row.lead_status ?? "New") as Contact["leadStatus"],
+    isPrimary: row.is_primary,
+    createdDate: row.created_date,
+  };
+}
+
+export async function getContactsForCompany(companyId: string): Promise<Contact[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("contacts")
+    .select(CONTACT_SELECT)
+    .eq("company_id", companyId)
+    .order("is_primary", { ascending: false });
+  if (error) throw new Error(error.message);
+  return ((data ?? []) as unknown as ContactRow[]).map(mapContact);
+}
+
+export async function getLeadsForCompany(companyId: string): Promise<Lead[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("leads")
+    .select(LEAD_SELECT)
+    .eq("company_id", companyId)
+    .order("created_date", { ascending: false });
+  if (error) throw new Error(error.message);
+  return ((data ?? []) as unknown as LeadRow[]).map(mapLead);
 }
 
 /** Merge a lead's calls + follow-ups into a chronological activity timeline (mirrors mock/index.ts). */
