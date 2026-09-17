@@ -32,21 +32,22 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const isLoginRoute = request.nextUrl.pathname === "/login";
-
-  if (!user && !isLoginRoute) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    url.searchParams.set("next", request.nextUrl.pathname);
-    return NextResponse.redirect(url);
-  }
-
-  if (user && isLoginRoute) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/";
-    url.searchParams.delete("next");
-    return NextResponse.redirect(url);
-  }
+  // Login gate temporarily disabled — re-enable once magic link auth is in place.
+  // const isLoginRoute = request.nextUrl.pathname === "/login";
+  //
+  // if (!user && !isLoginRoute) {
+  //   const url = request.nextUrl.clone();
+  //   url.pathname = "/login";
+  //   url.searchParams.set("next", request.nextUrl.pathname);
+  //   return NextResponse.redirect(url);
+  // }
+  //
+  // if (user && isLoginRoute) {
+  //   const url = request.nextUrl.clone();
+  //   url.pathname = "/";
+  //   url.searchParams.delete("next");
+  //   return NextResponse.redirect(url);
+  // }
 
   return response;
 }
